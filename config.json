@@ -1,0 +1,13 @@
+{
+    "group_name": "hello",
+    "welcome_message": "Welcome to the group!",
+    "goodbye_message": "Goodbye, hope to see you again!",
+    "bot_name": "Roger N Reckon",
+    "commands": {
+        "hi": "Welcome to Roger N Reckon, how can I help you?",
+        "how are you?": "I'm fine, thank you",
+        "what is your name?": "My name is Roger N Reckon"
+    },
+    "api_cache_time": 300,
+    "api_error_message": "Error fetching data, please try again later."
+}

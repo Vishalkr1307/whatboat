@@ -12,8 +12,18 @@ client.on("qr", qr => {
     })
 });
 
-client.on("ready", () => {
+client.on("ready", async () => {
     console.log("Client is ready");
+    const chat= await client.getChats();
+    const groupName="hello"
+    const groupChat=chat.find(chat=> chat.isGroup && chat.name===groupName);
+    if(groupChat){
+        client.sendMessage(groupChat.id._serialized, "Roger N Reckon is ready to help you")
+        console.log(`message sent to ${groupChat.name}`)
+    }
+    else{
+        console.log(`group ${groupName} not found`)
+    }
 });
 
 client.on("message", async msg => {
@@ -94,13 +104,47 @@ client.on("message", async msg => {
         
     }
 
-    client.on("message_reaction",(reaction)=>{
-        console.log(`Reaction received: ${reaction.emoji.text}`)
-    })
+   
 
     
 
     
 });
+client.on("message_reaction",(reaction)=>{
+    console.log(`Reaction received: ${reaction.emoji.text}`)
+})
+
+client.on("message_ack",(message)=>{
+    console.log(`Message acknowledged: ${message.id}`)
+})
+client.on("group_join",async (notification)=>{
+    const chat=await notification.getChat()
+    if(chat.isGroup){
+        const groupName=chat.name
+        const groupChat=await client.getChatById(chat.id._serialized)
+        if(groupChat){
+            client.sendMessage(groupChat.id._serialized,`Welcome to ${groupName}`)
+            console.log(`welcome message sent to ${groupName}`)
+        }
+        else{
+            console.log(`group ${groupName} not found`)
+        }
+    }
+})
+
+client.on("group_leave",async (notification)=>{
+    const chat=await notification.getChat()
+    if(chat.isGroup){
+        const groupName=chat.name
+        const groupChat=await client.getChatById(chat.id._serialized)
+        if(groupChat){
+            client.sendMessage(groupChat.id._serialized,`Goodbye ${groupName}`)
+            console.log(`goodbye message sent to ${groupName}`)
+        }
+        else{
+            console.log(`group ${groupName} not found`)
+        }
+    }
+})
 
 client.initialize();
