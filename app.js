@@ -5,16 +5,31 @@ const fs = require("fs");
 const path = require("path");
 
 const configPath = path.join(__dirname, 'config.json');
-const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+let config;
+try {
+    config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+} catch (error) {
+    console.error("Failed to read or parse config.json:", error);
+    process.exit(1); // Exit if config loading fails
+}
 
 const apiCache = new Map();
+let qrGenerated=false
 
 const client = new Client({
     authStrategy: new LocalAuth()
 });
 
 client.on("qr", qr => {
-    qrcode.generate(qr, { small: true });
+    if(!qrGenerated){
+        qrcode.generate(qr, { small: true });
+        qrGenerated=true
+        console.log("QR Code generated. Scan it to log in.")
+
+    }
+    else{
+        console.log("Already have a QR code, please scan it to log in.")
+    }
 });
 
 client.on("ready", async () => {
@@ -32,7 +47,7 @@ client.on("ready", async () => {
             console.log(`Group ${config.group_name} not found`);
         }
     } catch (error) {
-        console.error("Error during group lookup or message sending:", error);
+        console.error("Error during group lookup or message sending:", error.message || error);
     }
 });
 
@@ -45,33 +60,36 @@ client.on("message", async msg => {
         if (config.commands[msgBody]) {
             await msg.reply(config.commands[msgBody]);
         } else if (msgBody === "meme") {
-            const media = await MessageMedia.fromUrl("https://i.imgflip.com/30b1gx.jpg");
-            await client.sendMessage(msg.from, media, { caption: config.bot_name });
+            try {
+                const media = await MessageMedia.fromUrl("https://i.imgflip.com/30b1gx.jpg");
+                await client.sendMessage(msg.from, media, { caption: config.bot_name });
+            } catch (error) {
+                console.error("Failed to send meme:", error.message || error);
+                await msg.reply("Sorry, I couldn't fetch the meme.");
+            }
         } else if (msgBody === "location") {
-            const location = new Location(37.7749, -122.4194, "San Francisco");
-            await client.sendMessage(msg.from, location);
-        } 
-        else if (msgBody === "button") {
+            try {
+                const location = new Location(37.7749, -122.4194, "San Francisco");
+                await client.sendMessage(msg.from, location);
+            } catch (error) {
+                console.error("Error sending location:", error.message || error);
+                await msg.reply("Sorry, I couldn't send the location.");
+            }
+        } else if (msgBody === "button") {
             const buttons = [
                 { text: "Google", url: "https://www.google.com" },
                 { text: "Bing", url: "https://www.bing.com" }
             ];
-            
-            const buttonMessage = new Buttons(
-                buttons,         
-                "Choose a search engine", 
-                "Search Engines",        
-                "Powered by Roger N Reckon" 
-            );
-        
+
+            const buttonMessage = new Buttons(buttons, "Choose a search engine", "Search Engines", "Powered by Roger N Reckon");
+
             try {
                 await client.sendMessage(msg.from, buttonMessage);
             } catch (error) {
-                console.error("Error sending button message:", error);
+                console.error("Error sending button message:", error.message || error);
+                await msg.reply("Sorry, I couldn't send the button options.");
             }
-        }
-        
-         else if (msgBody === "list") {
+        } else if (msgBody === "list") {
             const sections = [
                 {
                     title: "Options",
@@ -83,25 +101,48 @@ client.on("message", async msg => {
                 }
             ];
             const list = new List("This is a list", "Select an option", sections, "Footer text");
-            await client.sendMessage(msg.from, list);
+
+            try {
+                await client.sendMessage(msg.from, list);
+            } catch (error) {
+                console.error("Error sending list message:", error.message || error);
+                await msg.reply("Sorry, I couldn't send the list options.");
+            }
         } else if (msgBody === "group" && chat.isGroup) {
             await msg.reply(`You are in the group: ${chat.name}`);
         } else if (!isNaN(msgBody)) {
             if (apiCache.has(msgBody)) {
                 await msg.reply(JSON.stringify(apiCache.get(msgBody)));
             } else {
-                const response = await axios.get(`https://api.agify.io/?name=${msgBody}`);
-                if (response.data.error) {
-                    await msg.reply(config.api_error_message);
-                } else {
-                    await msg.reply(JSON.stringify(response.data));
-                    apiCache.set(msgBody, response.data);
-                    setTimeout(() => apiCache.delete(msgBody), config.api_cache_time * 1000);
+                try {
+                    const response = await axios.get(`https://api.agify.io/?name=${msgBody}`);
+                    if (response.data.error) {
+                        await msg.reply(config.api_error_message);
+                    } else {
+                        await msg.reply(JSON.stringify(response.data));
+                        apiCache.set(msgBody, response.data);
+                        setTimeout(() => apiCache.delete(msgBody), config.api_cache_time * 1000);
+                    }
+                } catch (error) {
+                    if (error.response) {
+                        // Server responded with a status code outside the range of 2xx
+                        console.error("API server error:", error.response.data);
+                        await msg.reply("Sorry, the API service returned an error.");
+                    } else if (error.request) {
+                        // No response received
+                        console.error("No response received from API:", error.request);
+                        await msg.reply("Sorry, I couldn't reach the API service.");
+                    } else {
+                        // Other errors
+                        console.error("API request error:", error.message || error);
+                        await msg.reply("An error occurred while processing your request.");
+                    }
                 }
             }
         }
     } catch (error) {
-        console.error("Error handling message:", error);
+        console.error("Error handling message:", error.message || error);
+        await msg.reply("Sorry, something went wrong while processing your message.");
     }
 });
 
@@ -113,7 +154,7 @@ client.on("group_join", async notification => {
             console.log(`Welcome message sent to ${chat.name}`);
         }
     } catch (error) {
-        console.error("Error handling group join:", error);
+        console.error("Error handling group join:", error.message || error);
     }
 });
 
@@ -125,7 +166,7 @@ client.on("group_leave", async notification => {
             console.log(`Goodbye message sent to ${chat.name}`);
         }
     } catch (error) {
-        console.error("Error handling group leave:", error);
+        console.error("Error handling group leave:", error.message || error);
     }
 });
 
